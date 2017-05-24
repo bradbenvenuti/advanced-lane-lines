@@ -14,12 +14,12 @@ The goals / steps of this project are the following:
 [//]: # (Image References)
 
 [image1]: ./writeup-images/calibration.png "Calibrated"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[image2]: ./writeup-images/undistorted.png "Undistorted"
+[image3]: ./writeup-images/thresholds.png "Binary Example"
+[image4]: ./writeup-images/warped.png "Warp Example"
+[image5]: ./writeup-images/lines.png "Fit Visual"
+[image6]: ./writeup-images/lanes.png "Output"
+[video1]: ./out.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -39,40 +39,58 @@ I then used the output `objpoints` and `imgpoints` to compute the camera calibra
 
 #### 1. Provide an example of a distortion-corrected image.
 
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
+To undistort the image, I used the outputs from the previous step as parameters to apply cv2.undistort to the image. Example output below:
+
 ![alt text][image2]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of color and gradient thresholds to generate a binary image (see the section of "./project.ipynb" 'create a thresholded binary image').
+
+I first started by creating a copy of the image converted to HLS color space. I then selected pixels that had a saturation value between 160 - 255.
+
+Then I added some Gaussian blur to remove noise.
+
+Next, I converted the image to grayscale and applied the Sobel operator to get the gradient in the X direction and select pixels with a sobelx between 10 - 255.
+
+Using Sobel again, I found the magnitude of the gradient and applied a threshold of 40 - 255.
+
+Again, using Sobel, I found the direction of the gradient and applied a threshold of 0.65 - 1.05 radians.
+
+I combined all of those thresholds together, then selected an area of interest on the image where lane lines might appear.
+
+Here's an example of my output for this step.
 
 ![alt text][image3]
 
+
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+The code for my perspective transform is in "./project.ipynb" under Perspective Transform (perspectiveCorrection function).  The `perspectiveCorrection()` function takes as inputs an image (`img`).  I chose to hardcode the source and destination points in the following manner:
 
 ```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+	region = [[580, 460],[710, 460],[1150,720],[150,720]]
+	offset = 200
+	# Grab the image shape
+	img_size = (img.shape[1], img.shape[0])
+	# For source points I'm grabbing the outer four detected corners
+	src = np.float32(region)
+	# For destination points, I'm arbitrarily choosing some points to be
+	# a nice fit for displaying our warped result
+	dst = np.float32([[offset, 0],
+					  [img_size[0]-offset, 0],
+					  [img_size[0]-offset, img_size[1]],
+					  [offset, img_size[1]]])
 ```
 
 This resulted in the following source and destination points:
 
 | Source        | Destination   |
 |:-------------:|:-------------:|
-| 585, 460      | 320, 0        |
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 580, 460      | 200, 0        |
+| 710, 460      | 1080, 0      	|
+| 1150, 720     | 1080, 720     |
+| 150, 720      | 200, 720      |
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
@@ -80,17 +98,20 @@ I verified that my perspective transform was working as expected by drawing the 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+Using the combined binary image from step two I was able to select only the pixels that are lane lines. After warping the image I could fit a polynomial to each line by identifying the peaks in a histogram to determine the lane line locations and identify all nonzero pixels around the peaks.
 
 ![alt text][image5]
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+After finding the lane lines I calculated the position of the vehicle within the lane lines by calculating the average of the x intercepts from each of the two lane lines.
+Then I got the distance from center by taking the absolute value of the vehicle position and subtracting the midpoint. To convert this to meters I multiplied the number of pixels by 3.7/700.
+
+This is done in "./project.ipynb" toward the bottom of the drawLanes() function.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step in the section "Draw Lanes" in "./project.ipynb"  in the function `drawLanes()`.  Here is an example of my result on a test image:
 
 ![alt text][image6]
 
@@ -100,12 +121,11 @@ I implemented this step in lines # through # in my code in `yet_another_file.py`
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./out.mp4)
 
 ---
 
 ### Discussion
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.
+The pipeline I created did a fairly good job of detecting lane lines, however in less ideal conditions it would probably have a difficult time. For example, rain, snow, etc. Even shadows and changing road coloration gave my pipeline a little bit of trouble. I could make this more robust by adding better sanity checking and averaging the lines detected from a range of frames together. I could also improve and change the thresholding techniques and experiment with different ways to detect the lines.
